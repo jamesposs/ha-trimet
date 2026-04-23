@@ -19,6 +19,7 @@ from custom_components.trimet.config_flow import (
     _unique_id_from_api_key,
 )
 from custom_components.trimet.const import (
+    CONF_APPROACH_TIME_MINUTES,
     CONF_ALLOWED_DIRECTIONS,
     CONF_ALLOWED_ROUTES,
     CONF_ALLOWED_VEHICLE_TYPES,
@@ -27,11 +28,15 @@ from custom_components.trimet.const import (
     CONF_MAX_ARRIVALS,
     CONF_MONITORS,
     CONF_POLL_INTERVAL_SECONDS,
+    CONF_SENSOR_MODE,
     CONF_STOP_ID,
     DEFAULT_POLL_INTERVAL_SECONDS,
     DOMAIN,
     NAME,
+    SENSOR_MODE_NEXT_CATCHABLE_ARRIVAL,
+    SENSOR_MODE_NEXT_ARRIVAL,
 )
+from custom_components.trimet.models import MonitorConfig
 
 
 async def test_user_flow_success(hass) -> None:
@@ -129,6 +134,8 @@ async def test_options_flow_add_monitor(hass, mock_config_entry) -> None:
             CONF_ALLOWED_DIRECTIONS: "southbound",
             CONF_ALLOWED_VEHICLE_TYPES: "bus",
             CONF_DUE_SOON_MINUTES: 6,
+            CONF_APPROACH_TIME_MINUTES: 4,
+            CONF_SENSOR_MODE: SENSOR_MODE_NEXT_CATCHABLE_ARRIVAL,
             CONF_MAX_ARRIVALS: 2,
         },
     )
@@ -139,6 +146,27 @@ async def test_options_flow_add_monitor(hass, mock_config_entry) -> None:
     assert monitor[CONF_FRIENDLY_NAME] == "Downtown Bus"
     assert monitor[CONF_STOP_ID] == "5678"
     assert monitor[CONF_ALLOWED_VEHICLE_TYPES] == ["bus"]
+    assert monitor[CONF_APPROACH_TIME_MINUTES] == 4
+    assert monitor[CONF_SENSOR_MODE] == SENSOR_MODE_NEXT_CATCHABLE_ARRIVAL
+
+
+def test_monitor_config_defaults_new_decision_fields() -> None:
+    """Test older monitor payloads pick up new defaults safely."""
+    parsed = MonitorConfig.from_dict(
+        {
+            "monitor_id": "legacy",
+            CONF_FRIENDLY_NAME: "Legacy Monitor",
+            CONF_STOP_ID: "1234",
+            CONF_ALLOWED_ROUTES: ["90"],
+            CONF_ALLOWED_DIRECTIONS: ["southbound"],
+            CONF_ALLOWED_VEHICLE_TYPES: ["max"],
+            CONF_DUE_SOON_MINUTES: 10,
+            CONF_MAX_ARRIVALS: 3,
+        }
+    )
+
+    assert parsed.approach_time_minutes == 0
+    assert parsed.sensor_mode == SENSOR_MODE_NEXT_ARRIVAL
 
 
 def test_async_get_options_flow_uses_modern_constructor(mock_config_entry) -> None:

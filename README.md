@@ -13,6 +13,8 @@
   - route/line list
   - direction list
   - vehicle types (`bus`, `max`, `streetcar`, `wes`)
+  - approach time to the stop
+  - primary sensor mode (`next_arrival` or `next_catchable_arrival`)
   - due soon threshold
   - number of arrivals kept in attributes
 - Optional helper entity:
@@ -60,6 +62,10 @@ Each monitor includes:
 - Allowed routes/lines as a comma-separated list, or blank for all routes
 - Allowed directions as a comma-separated list, or blank for all directions
 - Allowed vehicle types as a comma-separated list using `bus`, `max`, `streetcar`, `wes`, or blank for all
+- Approach time to the stop in minutes
+- Primary sensor mode:
+  - `next_arrival`
+  - `next_catchable_arrival`
 - Due soon threshold in minutes
 - Number of matching arrivals to expose in attributes
 
@@ -69,9 +75,9 @@ Each monitor creates one primary sensor and one optional helper binary sensor.
 
 ### Main Sensor
 
-State: integer minutes until the next matching arrival.
+State: integer minutes until the configured primary arrival.
 
-When no arrivals match, the sensor becomes `unknown` instead of holding a stale value. When the API is unavailable, the entity becomes unavailable.
+The primary sensor can either track the literal next matching arrival or the next catchable arrival after your configured approach time. When no arrivals match, the sensor becomes `unknown` instead of holding a stale value. In catchable mode, the sensor also becomes `unknown` when arrivals exist but none can be caught in time. When the API is unavailable, the entity becomes unavailable.
 
 Important attributes include:
 
@@ -80,7 +86,13 @@ Important attributes include:
 - `configured_lines`
 - `configured_directions`
 - `configured_vehicle_types`
+- `approach_time_minutes`
+- `sensor_mode`
 - `due_soon_threshold`
+- `next_arrival_minutes`
+- `next_arrival`
+- `next_catchable_arrival_minutes`
+- `next_catchable_arrival`
 - `next_route`
 - `next_route_id`
 - `next_destination`
@@ -89,13 +101,15 @@ Important attributes include:
 - `next_estimated_at`
 - `live_prediction`
 - `matching_arrivals`
+- `catchable_arrivals`
+- `skipped_arrivals`
 - `service_active`
 - `summary`
 - `last_updated`
 
 ### Due Soon Binary Sensor
 
-Turns on when the next matching arrival is at or below the monitor's threshold.
+Turns on when the literal next matching arrival is at or below the monitor's threshold.
 
 ## Filtering Rules
 

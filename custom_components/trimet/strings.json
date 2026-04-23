@@ -48,12 +48,15 @@
           "allowed_directions": "Allowed directions",
           "allowed_vehicle_types": "Allowed vehicle types",
           "due_soon_minutes": "Due soon threshold (minutes)",
+          "approach_time_minutes": "Approach time to stop (minutes)",
+          "sensor_mode": "Primary sensor mode",
           "max_arrivals": "Arrivals in attributes"
         },
         "data_description": {
           "allowed_routes": "Comma-separated route IDs or line numbers, for example 6, 72, 90",
           "allowed_directions": "Comma-separated TriMet direction labels, for example northbound, westbound",
-          "allowed_vehicle_types": "Comma-separated values from bus, max, streetcar, wes"
+          "allowed_vehicle_types": "Comma-separated values from bus, max, streetcar, wes",
+          "approach_time_minutes": "Minutes needed to reach the stop before a departure counts as catchable"
         }
       },
       "monitor_edit_select": {
@@ -72,12 +75,15 @@
           "allowed_directions": "Allowed directions",
           "allowed_vehicle_types": "Allowed vehicle types",
           "due_soon_minutes": "Due soon threshold (minutes)",
+          "approach_time_minutes": "Approach time to stop (minutes)",
+          "sensor_mode": "Primary sensor mode",
           "max_arrivals": "Arrivals in attributes"
         },
         "data_description": {
           "allowed_routes": "Comma-separated route IDs or line numbers, for example 6, 72, 90",
           "allowed_directions": "Comma-separated TriMet direction labels, for example northbound, westbound",
-          "allowed_vehicle_types": "Comma-separated values from bus, max, streetcar, wes"
+          "allowed_vehicle_types": "Comma-separated values from bus, max, streetcar, wes",
+          "approach_time_minutes": "Minutes needed to reach the stop before a departure counts as catchable"
         }
       },
       "monitor_delete_select": {

@@ -14,6 +14,7 @@ except ImportError:  # pragma: no cover
     from tests.common import MockConfigEntry
 
 from custom_components.trimet.const import (
+    CONF_APPROACH_TIME_MINUTES,
     CONF_ALLOWED_DIRECTIONS,
     CONF_ALLOWED_ROUTES,
     CONF_ALLOWED_VEHICLE_TYPES,
@@ -23,12 +24,15 @@ from custom_components.trimet.const import (
     CONF_MONITOR_ID,
     CONF_MONITORS,
     CONF_POLL_INTERVAL_SECONDS,
+    CONF_SENSOR_MODE,
     CONF_STOP_ID,
+    DEFAULT_APPROACH_TIME_MINUTES,
     DEFAULT_DUE_SOON_MINUTES,
     DEFAULT_MAX_ARRIVALS,
     DEFAULT_POLL_INTERVAL_SECONDS,
     DOMAIN,
     NAME,
+    SENSOR_MODE_NEXT_ARRIVAL,
 )
 from custom_components.trimet.models import parse_arrivals_response
 
@@ -136,6 +140,8 @@ def make_monitor_dict(
     directions: list[str] | None = None,
     vehicle_types: list[str] | None = None,
     due_soon_minutes: int = DEFAULT_DUE_SOON_MINUTES,
+    approach_time_minutes: int = DEFAULT_APPROACH_TIME_MINUTES,
+    sensor_mode: str = SENSOR_MODE_NEXT_ARRIVAL,
     max_arrivals: int = DEFAULT_MAX_ARRIVALS,
 ) -> dict[str, object]:
     """Create a stored monitor dict for tests."""
@@ -147,6 +153,8 @@ def make_monitor_dict(
         CONF_ALLOWED_DIRECTIONS: directions or ["southbound"],
         CONF_ALLOWED_VEHICLE_TYPES: vehicle_types or ["max"],
         CONF_DUE_SOON_MINUTES: due_soon_minutes,
+        CONF_APPROACH_TIME_MINUTES: approach_time_minutes,
+        CONF_SENSOR_MODE: sensor_mode,
         CONF_MAX_ARRIVALS: max_arrivals,
     }
 

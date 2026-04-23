@@ -21,6 +21,7 @@ from .api import (
     TriMetResponseError,
 )
 from .const import (
+    CONF_APPROACH_TIME_MINUTES,
     CONF_ALLOWED_DIRECTIONS,
     CONF_ALLOWED_ROUTES,
     CONF_ALLOWED_VEHICLE_TYPES,
@@ -30,7 +31,9 @@ from .const import (
     CONF_MONITOR_ID,
     CONF_MONITORS,
     CONF_POLL_INTERVAL_SECONDS,
+    CONF_SENSOR_MODE,
     CONF_STOP_ID,
+    DEFAULT_APPROACH_TIME_MINUTES,
     DEFAULT_DUE_SOON_MINUTES,
     DEFAULT_MAX_ARRIVALS,
     DEFAULT_POLL_INTERVAL_SECONDS,
@@ -51,9 +54,11 @@ from .const import (
     OPTIONS_MENU_MONITOR_ADD,
     OPTIONS_MENU_MONITOR_DELETE_SELECT,
     OPTIONS_MENU_MONITOR_EDIT_SELECT,
+    SENSOR_MODE_NEXT_ARRIVAL,
+    SENSOR_MODE_NEXT_CATCHABLE_ARRIVAL,
     SUPPORTED_VEHICLE_TYPES,
 )
-from .models import MonitorConfig, normalize_vehicle_types
+from .models import MonitorConfig, normalize_sensor_mode, normalize_vehicle_types
 
 
 class TriMetConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -288,6 +293,8 @@ class TriMetOptionsFlowHandler(config_entries.OptionsFlow):
             allowed_directions=(),
             allowed_vehicle_types=(),
             due_soon_minutes=DEFAULT_DUE_SOON_MINUTES,
+            approach_time_minutes=DEFAULT_APPROACH_TIME_MINUTES,
+            sensor_mode=SENSOR_MODE_NEXT_ARRIVAL,
             max_arrivals=DEFAULT_MAX_ARRIVALS,
         )
 
@@ -315,6 +322,19 @@ class TriMetOptionsFlowHandler(config_entries.OptionsFlow):
                         CONF_DUE_SOON_MINUTES,
                         default=monitor.due_soon_minutes,
                     ): vol.All(vol.Coerce(int), vol.Range(min=1, max=120)),
+                    vol.Required(
+                        CONF_APPROACH_TIME_MINUTES,
+                        default=monitor.approach_time_minutes,
+                    ): vol.All(vol.Coerce(int), vol.Range(min=0, max=180)),
+                    vol.Required(
+                        CONF_SENSOR_MODE,
+                        default=monitor.sensor_mode,
+                    ): vol.In(
+                        {
+                            SENSOR_MODE_NEXT_ARRIVAL: "Next arrival",
+                            SENSOR_MODE_NEXT_CATCHABLE_ARRIVAL: "Next catchable arrival",
+                        }
+                    ),
                     vol.Required(
                         CONF_MAX_ARRIVALS,
                         default=monitor.max_arrivals,
@@ -404,6 +424,8 @@ def _monitor_from_form(
         ),
         allowed_vehicle_types=vehicle_types,
         due_soon_minutes=int(user_input[CONF_DUE_SOON_MINUTES]),
+        approach_time_minutes=int(user_input[CONF_APPROACH_TIME_MINUTES]),
+        sensor_mode=normalize_sensor_mode(user_input.get(CONF_SENSOR_MODE)),
         max_arrivals=int(user_input[CONF_MAX_ARRIVALS]),
     )
 

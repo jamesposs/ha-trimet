@@ -10,18 +10,26 @@ import math
 from typing import Any
 
 from .const import (
+    ATTR_CATCHABLE_ARRIVALS,
     ATTR_MATCHING_ARRIVALS,
+    ATTR_SKIPPED_ARRIVALS,
+    CONF_APPROACH_TIME_MINUTES,
     CONF_ALLOWED_DIRECTIONS,
     CONF_ALLOWED_ROUTES,
+    CONF_SENSOR_MODE,
     CONF_ALLOWED_VEHICLE_TYPES,
     CONF_DUE_SOON_MINUTES,
     CONF_FRIENDLY_NAME,
     CONF_MAX_ARRIVALS,
     CONF_MONITOR_ID,
     CONF_STOP_ID,
+    DEFAULT_APPROACH_TIME_MINUTES,
     DEFAULT_DUE_SOON_MINUTES,
     DEFAULT_MAX_ARRIVALS,
+    SENSOR_MODE_NEXT_ARRIVAL,
+    SENSOR_MODE_NEXT_CATCHABLE_ARRIVAL,
     SUPPORTED_VEHICLE_TYPES,
+    SUPPORTED_SENSOR_MODES,
     VEHICLE_TYPE_BUS,
     VEHICLE_TYPE_MAX,
     VEHICLE_TYPE_OTHER,
@@ -38,6 +46,13 @@ class VehicleType(StrEnum):
     STREETCAR = VEHICLE_TYPE_STREETCAR
     WES = VEHICLE_TYPE_WES
     OTHER = VEHICLE_TYPE_OTHER
+
+
+class SensorMode(StrEnum):
+    """Primary sensor behavior modes."""
+
+    NEXT_ARRIVAL = SENSOR_MODE_NEXT_ARRIVAL
+    NEXT_CATCHABLE_ARRIVAL = SENSOR_MODE_NEXT_CATCHABLE_ARRIVAL
 
 
 @dataclass(slots=True, frozen=True)
@@ -112,6 +127,8 @@ class MonitorConfig:
     allowed_directions: tuple[str, ...]
     allowed_vehicle_types: tuple[str, ...]
     due_soon_minutes: int = DEFAULT_DUE_SOON_MINUTES
+    approach_time_minutes: int = DEFAULT_APPROACH_TIME_MINUTES
+    sensor_mode: str = SENSOR_MODE_NEXT_ARRIVAL
     max_arrivals: int = DEFAULT_MAX_ARRIVALS
 
     @classmethod
@@ -129,6 +146,10 @@ class MonitorConfig:
                 data.get(CONF_ALLOWED_VEHICLE_TYPES)
             ),
             due_soon_minutes=int(data.get(CONF_DUE_SOON_MINUTES, DEFAULT_DUE_SOON_MINUTES)),
+            approach_time_minutes=int(
+                data.get(CONF_APPROACH_TIME_MINUTES, DEFAULT_APPROACH_TIME_MINUTES)
+            ),
+            sensor_mode=normalize_sensor_mode(data.get(CONF_SENSOR_MODE)),
             max_arrivals=int(data.get(CONF_MAX_ARRIVALS, DEFAULT_MAX_ARRIVALS)),
         )
 
@@ -142,8 +163,15 @@ class MonitorConfig:
             CONF_ALLOWED_DIRECTIONS: list(self.allowed_directions),
             CONF_ALLOWED_VEHICLE_TYPES: list(self.allowed_vehicle_types),
             CONF_DUE_SOON_MINUTES: self.due_soon_minutes,
+            CONF_APPROACH_TIME_MINUTES: self.approach_time_minutes,
+            CONF_SENSOR_MODE: self.sensor_mode,
             CONF_MAX_ARRIVALS: self.max_arrivals,
         }
+
+    @property
+    def sensor_mode_enum(self) -> SensorMode:
+        """Return the configured sensor mode as an enum."""
+        return SensorMode(normalize_sensor_mode(self.sensor_mode))
 
     def matches(self, arrival: Arrival) -> bool:
         """Return whether an arrival matches this monitor."""
@@ -178,6 +206,46 @@ class MonitorSnapshot:
         return self.matching_arrivals[0] if self.matching_arrivals else None
 
     @property
+    def catchable_arrivals(self) -> tuple[Arrival, ...]:
+        """Return arrivals that can be reached in time."""
+        return tuple(
+            arrival
+            for arrival in self.matching_arrivals
+            if arrival.minutes_until(self.reference_time)
+            >= self.monitor.approach_time_minutes
+        )
+
+    @property
+    def skipped_arrivals(self) -> tuple[Arrival, ...]:
+        """Return arrivals that are too soon to catch."""
+        return tuple(
+            arrival
+            for arrival in self.matching_arrivals
+            if arrival.minutes_until(self.reference_time)
+            < self.monitor.approach_time_minutes
+        )
+
+    @property
+    def next_catchable_arrival(self) -> Arrival | None:
+        """Return the next arrival that can still be caught."""
+        return self.catchable_arrivals[0] if self.catchable_arrivals else None
+
+    @property
+    def primary_arrival(self) -> Arrival | None:
+        """Return the arrival used for the primary sensor."""
+        if self.monitor.sensor_mode_enum is SensorMode.NEXT_CATCHABLE_ARRIVAL:
+            return self.next_catchable_arrival
+        return self.next_arrival
+
+    @property
+    def primary_minutes(self) -> int | None:
+        """Return minutes for the configured primary arrival."""
+        primary_arrival = self.primary_arrival
+        if primary_arrival is None:
+            return None
+        return primary_arrival.minutes_until(self.reference_time)
+
+    @property
     def service_active(self) -> bool:
         """Return whether matching service is currently available."""
         return bool(self.matching_arrivals)
@@ -185,45 +253,77 @@ class MonitorSnapshot:
     @property
     def summary(self) -> str:
         """Return a human-readable summary string."""
-        next_arrival = self.next_arrival
-        if next_arrival is None:
+        primary_arrival = self.primary_arrival
+        if primary_arrival is None:
+            if (
+                self.monitor.sensor_mode_enum is SensorMode.NEXT_CATCHABLE_ARRIVAL
+                and self.matching_arrivals
+            ):
+                departures_considered = min(
+                    len(self.matching_arrivals), self.monitor.max_arrivals
+                )
+                return (
+                    "No catchable arrivals in the next "
+                    f"{departures_considered} departures"
+                )
             return "No matching arrivals"
 
-        route_name = next_arrival.route_name or next_arrival.route_id
-        minutes = next_arrival.minutes_until(self.reference_time)
-        destination = next_arrival.destination or "service"
+        route_name = primary_arrival.route_name or primary_arrival.route_id
+        minutes = primary_arrival.minutes_until(self.reference_time)
+        destination = primary_arrival.destination or "service"
         return f"{route_name} to {destination} in {minutes} min"
 
-    def serialize_matching_arrivals(self) -> list[dict[str, Any]]:
-        """Serialize matching arrivals for state attributes."""
+    def _serialize_arrival(self, arrival: Arrival) -> dict[str, Any]:
+        """Serialize one arrival for state attributes."""
+        minutes = arrival.minutes_until(self.reference_time)
+        return {
+            "minutes": minutes,
+            "route": arrival.route_name or arrival.route_id,
+            "route_id": arrival.route_id,
+            "destination": arrival.destination,
+            "direction": arrival.direction,
+            "vehicle_type": arrival.vehicle_type.value,
+            "scheduled_at": arrival.scheduled_at.isoformat(),
+            "estimated_at": arrival.estimated_at.isoformat()
+            if arrival.estimated_at
+            else None,
+            "live_prediction": arrival.live_prediction,
+            "status": arrival.status,
+            "catchable": minutes >= self.monitor.approach_time_minutes,
+        }
+
+    def _serialize_arrivals(
+        self, arrivals: Sequence[Arrival], *, limit: int | None = None
+    ) -> list[dict[str, Any]]:
+        """Serialize arrivals for state attributes."""
+        selected_arrivals = arrivals if limit is None else arrivals[:limit]
         return [
-            {
-                "minutes": arrival.minutes_until(self.reference_time),
-                "route": arrival.route_name or arrival.route_id,
-                "route_id": arrival.route_id,
-                "destination": arrival.destination,
-                "direction": arrival.direction,
-                "vehicle_type": arrival.vehicle_type.value,
-                "scheduled_at": arrival.scheduled_at.isoformat(),
-                "estimated_at": arrival.estimated_at.isoformat()
-                if arrival.estimated_at
-                else None,
-                "live_prediction": arrival.live_prediction,
-                "status": arrival.status,
-            }
-            for arrival in self.matching_arrivals[: self.monitor.max_arrivals]
+            self._serialize_arrival(arrival) for arrival in selected_arrivals
         ]
 
     def as_main_sensor_attributes(self) -> dict[str, Any]:
         """Return the shared attribute payload for the main sensor."""
         next_arrival = self.next_arrival
-        return {
+        next_catchable_arrival = self.next_catchable_arrival
+        matching_arrivals = self._serialize_arrivals(
+            self.matching_arrivals, limit=self.monitor.max_arrivals
+        )
+        catchable_arrivals = self._serialize_arrivals(
+            self.catchable_arrivals, limit=self.monitor.max_arrivals
+        )
+        skipped_arrivals = self._serialize_arrivals(
+            self.skipped_arrivals, limit=self.monitor.max_arrivals
+        )
+
+        attributes: dict[str, Any] = {
             "stop_id": self.monitor.stop_id,
-            "stop_name": self.stop.name,
+            "stop_name": self.stop.name or self.stop.description or self.monitor.stop_id,
             "configured_lines": list(self.monitor.allowed_routes),
             "configured_directions": list(self.monitor.allowed_directions),
             "configured_vehicle_types": list(self.monitor.allowed_vehicle_types),
             "due_soon_threshold": self.monitor.due_soon_minutes,
+            "approach_time_minutes": self.monitor.approach_time_minutes,
+            "sensor_mode": self.monitor.sensor_mode,
             "next_route": next_arrival.route_name if next_arrival else None,
             "next_route_id": next_arrival.route_id if next_arrival else None,
             "next_destination": next_arrival.destination if next_arrival else None,
@@ -235,11 +335,31 @@ class MonitorSnapshot:
             if next_arrival and next_arrival.estimated_at
             else None,
             "live_prediction": next_arrival.live_prediction if next_arrival else None,
-            ATTR_MATCHING_ARRIVALS: self.serialize_matching_arrivals(),
+            "next_arrival_minutes": next_arrival.minutes_until(self.reference_time)
+            if next_arrival
+            else None,
+            "next_arrival": self._serialize_arrival(next_arrival)
+            if next_arrival
+            else None,
+            "next_catchable_arrival_minutes": (
+                next_catchable_arrival.minutes_until(self.reference_time)
+                if next_catchable_arrival
+                else None
+            ),
+            "next_catchable_arrival": (
+                self._serialize_arrival(next_catchable_arrival)
+                if next_catchable_arrival
+                else None
+            ),
+            ATTR_MATCHING_ARRIVALS: matching_arrivals,
+            ATTR_CATCHABLE_ARRIVALS: catchable_arrivals,
             "service_active": self.service_active,
             "summary": self.summary,
             "last_updated": self.last_updated.isoformat(),
         }
+        if skipped_arrivals:
+            attributes[ATTR_SKIPPED_ARRIVALS] = skipped_arrivals
+        return attributes
 
 
 def normalize_text_list(
@@ -280,6 +400,16 @@ def normalize_vehicle_types(value: str | Sequence[str] | None) -> tuple[str, ...
     """Normalize configured vehicle types."""
     normalized = normalize_text_list(value, lowercase=True)
     return tuple(item for item in normalized if item in SUPPORTED_VEHICLE_TYPES)
+
+
+def normalize_sensor_mode(value: Any) -> str:
+    """Normalize the configured primary sensor mode."""
+    normalized = normalize_single_text(
+        str(value) if value is not None else None, lowercase=True
+    )
+    if normalized in SUPPORTED_SENSOR_MODES:
+        return normalized
+    return SENSOR_MODE_NEXT_ARRIVAL
 
 
 def normalize_single_text(

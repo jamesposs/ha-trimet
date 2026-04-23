@@ -21,6 +21,7 @@ from custom_components.trimet.const import (
     CONF_POLL_INTERVAL_SECONDS,
     DEFAULT_POLL_INTERVAL_SECONDS,
     DOMAIN,
+    SENSOR_MODE_NEXT_CATCHABLE_ARRIVAL,
 )
 from custom_components.trimet.coordinator import TriMetDataUpdateCoordinator
 
@@ -57,6 +58,32 @@ async def test_coordinator_filters_route_direction_and_vehicle_type(
     assert snapshot.next_arrival.route_id == "90"
     assert snapshot.next_arrival.direction == "Southbound"
     assert snapshot.next_arrival.vehicle_type.value == "max"
+    assert snapshot.next_catchable_arrival is not None
+    assert snapshot.primary_minutes == 4
+
+
+async def test_coordinator_computes_catchable_arrivals(
+    hass, sample_feed, mock_config_entry
+) -> None:
+    """Test decision-oriented catchable arrival selection."""
+    monitor = mock_config_entry.options[CONF_MONITORS][0]
+    monitor["approach_time_minutes"] = 5
+    monitor["sensor_mode"] = SENSOR_MODE_NEXT_CATCHABLE_ARRIVAL
+    api = StubApi(feed=sample_feed)
+    coordinator = TriMetDataUpdateCoordinator(hass, api, mock_config_entry)
+
+    await coordinator.async_refresh()
+
+    snapshot = coordinator.get_monitor_snapshot("monitor_blue")
+    assert snapshot is not None
+    assert snapshot.next_arrival is not None
+    assert snapshot.next_arrival.minutes_until(snapshot.reference_time) == 4
+    assert snapshot.next_catchable_arrival is not None
+    assert snapshot.next_catchable_arrival.minutes_until(snapshot.reference_time) == 9
+    assert len(snapshot.catchable_arrivals) == 1
+    assert len(snapshot.skipped_arrivals) == 1
+    assert snapshot.primary_minutes == 9
+    assert snapshot.summary == "Blue to Hillsboro in 9 min"
 
 
 async def test_coordinator_marks_failed_update_on_connection_error(

@@ -44,10 +44,9 @@ class TriMetNextArrivalSensor(TriMetMonitorEntity, SensorEntity):
     def native_value(self) -> int | None:
         """Return the next arrival in minutes."""
         snapshot = self.snapshot
-        next_arrival = snapshot.next_arrival if snapshot else None
-        if snapshot is None or next_arrival is None:
+        if snapshot is None:
             return None
-        return next_arrival.minutes_until(snapshot.reference_time)
+        return snapshot.primary_minutes
 
     @property
     def native_unit_of_measurement(self) -> str | None:
