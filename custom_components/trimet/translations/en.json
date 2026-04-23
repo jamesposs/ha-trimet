@@ -1,0 +1,98 @@
+{
+  "title": "TriMet",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to TriMet",
+        "description": "Enter your TriMet developer API key and the shared polling interval for all monitors.",
+        "data": {
+          "api_key": "API key",
+          "poll_interval_seconds": "Polling interval (seconds)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the TriMet API",
+      "invalid_auth": "The TriMet API key is invalid",
+      "invalid_response": "TriMet returned an unexpected response",
+      "unknown": "An unexpected error occurred"
+    },
+    "abort": {
+      "already_configured": "This TriMet API key is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "TriMet options",
+        "menu_options": {
+          "global": "Edit polling interval",
+          "monitor_add": "Add monitor",
+          "monitor_edit_select": "Edit monitor",
+          "monitor_delete_select": "Delete monitor"
+        }
+      },
+      "global": {
+        "title": "Global settings",
+        "data": {
+          "poll_interval_seconds": "Polling interval (seconds)"
+        }
+      },
+      "monitor_add": {
+        "title": "Add monitor",
+        "description": "Create a stop monitor. Leave route, direction, or vehicle type blank to match all values.",
+        "data": {
+          "friendly_name": "Friendly name",
+          "stop_id": "Stop ID",
+          "allowed_routes": "Allowed routes or lines",
+          "allowed_directions": "Allowed directions",
+          "allowed_vehicle_types": "Allowed vehicle types",
+          "due_soon_minutes": "Due soon threshold (minutes)",
+          "max_arrivals": "Arrivals in attributes"
+        },
+        "data_description": {
+          "allowed_routes": "Comma-separated route IDs or line numbers, for example 6, 72, 90",
+          "allowed_directions": "Comma-separated TriMet direction labels, for example northbound, westbound",
+          "allowed_vehicle_types": "Comma-separated values from bus, max, streetcar, wes"
+        }
+      },
+      "monitor_edit_select": {
+        "title": "Select monitor",
+        "data": {
+          "monitor_id": "Monitor"
+        }
+      },
+      "monitor_edit": {
+        "title": "Edit monitor",
+        "description": "Update the monitor fields. Blank filters still match all values.",
+        "data": {
+          "friendly_name": "Friendly name",
+          "stop_id": "Stop ID",
+          "allowed_routes": "Allowed routes or lines",
+          "allowed_directions": "Allowed directions",
+          "allowed_vehicle_types": "Allowed vehicle types",
+          "due_soon_minutes": "Due soon threshold (minutes)",
+          "max_arrivals": "Arrivals in attributes"
+        },
+        "data_description": {
+          "allowed_routes": "Comma-separated route IDs or line numbers, for example 6, 72, 90",
+          "allowed_directions": "Comma-separated TriMet direction labels, for example northbound, westbound",
+          "allowed_vehicle_types": "Comma-separated values from bus, max, streetcar, wes"
+        }
+      },
+      "monitor_delete_select": {
+        "title": "Delete monitor",
+        "data": {
+          "monitor_id": "Monitor"
+        }
+      }
+    },
+    "error": {
+      "invalid_stop_id": "Stop ID must be numeric",
+      "invalid_vehicle_type": "Vehicle types must be bus, max, streetcar, and/or wes"
+    },
+    "abort": {
+      "no_monitors": "There are no monitors to manage"
+    }
+  }
+}

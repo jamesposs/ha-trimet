@@ -1,0 +1,12 @@
+{
+  "domain": "trimet",
+  "name": "TriMet",
+  "codeowners": ["@jamesposs"],
+  "config_flow": true,
+  "documentation": "https://github.com/jamesposs/ha-trimet",
+  "issue_tracker": "https://github.com/jamesposs/ha-trimet/issues",
+  "integration_type": "hub",
+  "iot_class": "cloud_polling",
+  "requirements": [],
+  "version": "1.0.0"
+}
