@@ -13,7 +13,11 @@ except ImportError:  # pragma: no cover
     from tests.common import MockConfigEntry
 
 from custom_components.trimet.api import TriMetAuthenticationError
-from custom_components.trimet.config_flow import _unique_id_from_api_key
+from custom_components.trimet.config_flow import (
+    TriMetConfigFlow,
+    TriMetOptionsFlowHandler,
+    _unique_id_from_api_key,
+)
 from custom_components.trimet.const import (
     CONF_ALLOWED_DIRECTIONS,
     CONF_ALLOWED_ROUTES,
@@ -134,3 +138,10 @@ async def test_options_flow_add_monitor(hass, mock_config_entry) -> None:
     assert monitor[CONF_FRIENDLY_NAME] == "Downtown Bus"
     assert monitor[CONF_STOP_ID] == "5678"
     assert monitor[CONF_ALLOWED_VEHICLE_TYPES] == ["bus"]
+
+
+def test_async_get_options_flow_uses_modern_constructor(mock_config_entry) -> None:
+    """Test options flows are created without config-entry constructor injection."""
+    flow = TriMetConfigFlow.async_get_options_flow(mock_config_entry)
+
+    assert isinstance(flow, TriMetOptionsFlowHandler)

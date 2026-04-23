@@ -11,7 +11,7 @@ import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.const import CONF_API_KEY
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import (
@@ -113,19 +113,20 @@ class TriMetConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     @staticmethod
+    @callback
     def async_get_options_flow(
         config_entry: config_entries.ConfigEntry,
     ) -> config_entries.OptionsFlow:
         """Return the options flow."""
-        return TriMetOptionsFlowHandler(config_entry)
+        del config_entry
+        return TriMetOptionsFlowHandler()
 
 
 class TriMetOptionsFlowHandler(config_entries.OptionsFlow):
     """Manage TriMet monitors and editable global options."""
 
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+    def __init__(self) -> None:
         """Initialize the options flow."""
-        self.config_entry = config_entry
         self._selected_monitor_id: str | None = None
 
     async def async_step_init(
