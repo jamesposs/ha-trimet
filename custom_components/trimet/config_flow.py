@@ -46,6 +46,7 @@ from .const import (
     MAX_POLL_INTERVAL_SECONDS,
     MIN_MAX_ARRIVALS,
     MIN_POLL_INTERVAL_SECONDS,
+    NAME,
     OPTIONS_MENU_GLOBAL,
     OPTIONS_MENU_MONITOR_ADD,
     OPTIONS_MENU_MONITOR_DELETE_SELECT,
@@ -85,7 +86,7 @@ class TriMetConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 await self.async_set_unique_id(unique_id)
                 self._abort_if_unique_id_configured()
                 return self.async_create_entry(
-                    title="TriMet",
+                    title=NAME,
                     data={
                         CONF_API_KEY: api_key,
                         CONF_POLL_INTERVAL_SECONDS: poll_interval,

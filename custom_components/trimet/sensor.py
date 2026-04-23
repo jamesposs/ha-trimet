@@ -21,7 +21,6 @@ async def async_setup_entry(
     entities: list[SensorEntity] = []
     for monitor in entry.runtime_data.coordinator.iter_monitors():
         entities.append(TriMetNextArrivalSensor(entry, monitor.monitor_id))
-        entities.append(TriMetSummarySensor(entry, monitor.monitor_id))
     async_add_entities(entities)
 
 
@@ -29,7 +28,6 @@ class TriMetNextArrivalSensor(TriMetMonitorEntity, SensorEntity):
     """Minutes until the next matching arrival."""
 
     _attr_icon = "mdi:train-bus"
-    _attr_native_unit_of_measurement = UnitOfTime.MINUTES
     _attr_suggested_display_precision = 0
 
     def __init__(self, entry: TriMetConfigEntry, monitor_id: str) -> None:
@@ -40,7 +38,7 @@ class TriMetNextArrivalSensor(TriMetMonitorEntity, SensorEntity):
     def name(self) -> str | None:
         """Return the entity name."""
         monitor = self.monitor
-        return f"{monitor.friendly_name} Next Arrival" if monitor else None
+        return monitor.friendly_name if monitor else None
 
     @property
     def native_value(self) -> int | None:
@@ -52,40 +50,14 @@ class TriMetNextArrivalSensor(TriMetMonitorEntity, SensorEntity):
         return next_arrival.minutes_until(snapshot.reference_time)
 
     @property
+    def native_unit_of_measurement(self) -> str | None:
+        """Return the unit only when the sensor state is numeric."""
+        return UnitOfTime.MINUTES if self.native_value is not None else None
+
+    @property
     def extra_state_attributes(self) -> dict[str, object]:
         """Return extra state attributes."""
         snapshot = self.snapshot
         if snapshot is None:
             return {}
         return snapshot.as_main_sensor_attributes()
-
-
-class TriMetSummarySensor(TriMetMonitorEntity, SensorEntity):
-    """Human-readable summary of the next matching arrival."""
-
-    _attr_icon = "mdi:format-list-text"
-
-    def __init__(self, entry: TriMetConfigEntry, monitor_id: str) -> None:
-        """Initialize the sensor."""
-        super().__init__(entry, monitor_id, "summary")
-
-    @property
-    def name(self) -> str | None:
-        """Return the entity name."""
-        monitor = self.monitor
-        return f"{monitor.friendly_name} Summary" if monitor else None
-
-    @property
-    def native_value(self) -> str | None:
-        """Return a friendly summary string."""
-        snapshot = self.snapshot
-        next_arrival = snapshot.next_arrival if snapshot else None
-        if snapshot is None:
-            return None
-        if next_arrival is None:
-            return "No matching arrivals"
-
-        route_name = next_arrival.route_name or next_arrival.route_id
-        minutes = next_arrival.minutes_until(snapshot.reference_time)
-        destination = next_arrival.destination or "service"
-        return f"{route_name} to {destination} in {minutes} min"

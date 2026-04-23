@@ -7,7 +7,7 @@ import logging
 from homeassistant.const import Platform
 
 DOMAIN = "trimet"
-NAME = "TriMet"
+NAME = "Portland TriMet Arrivals"
 LOGGER = logging.getLogger(__package__)
 
 PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BINARY_SENSOR]

@@ -28,6 +28,7 @@ from custom_components.trimet.const import (
     DEFAULT_MAX_ARRIVALS,
     DEFAULT_POLL_INTERVAL_SECONDS,
     DOMAIN,
+    NAME,
 )
 from custom_components.trimet.models import parse_arrivals_response
 
@@ -167,7 +168,7 @@ def mock_config_entry() -> MockConfigEntry:
     """Return a default config entry with one MAX monitor."""
     return MockConfigEntry(
         domain=DOMAIN,
-        title="TriMet",
+        title=NAME,
         data={
             CONF_API_KEY: "test-api-key",
             CONF_POLL_INTERVAL_SECONDS: DEFAULT_POLL_INTERVAL_SECONDS,

@@ -177,6 +177,23 @@ class MonitorSnapshot:
         """Return the next matching arrival."""
         return self.matching_arrivals[0] if self.matching_arrivals else None
 
+    @property
+    def service_active(self) -> bool:
+        """Return whether matching service is currently available."""
+        return bool(self.matching_arrivals)
+
+    @property
+    def summary(self) -> str:
+        """Return a human-readable summary string."""
+        next_arrival = self.next_arrival
+        if next_arrival is None:
+            return "No matching arrivals"
+
+        route_name = next_arrival.route_name or next_arrival.route_id
+        minutes = next_arrival.minutes_until(self.reference_time)
+        destination = next_arrival.destination or "service"
+        return f"{route_name} to {destination} in {minutes} min"
+
     def serialize_matching_arrivals(self) -> list[dict[str, Any]]:
         """Serialize matching arrivals for state attributes."""
         return [
@@ -203,6 +220,10 @@ class MonitorSnapshot:
         return {
             "stop_id": self.monitor.stop_id,
             "stop_name": self.stop.name,
+            "configured_lines": list(self.monitor.allowed_routes),
+            "configured_directions": list(self.monitor.allowed_directions),
+            "configured_vehicle_types": list(self.monitor.allowed_vehicle_types),
+            "due_soon_threshold": self.monitor.due_soon_minutes,
             "next_route": next_arrival.route_name if next_arrival else None,
             "next_route_id": next_arrival.route_id if next_arrival else None,
             "next_destination": next_arrival.destination if next_arrival else None,
@@ -213,8 +234,10 @@ class MonitorSnapshot:
             "next_estimated_at": next_arrival.estimated_at.isoformat()
             if next_arrival and next_arrival.estimated_at
             else None,
-            "next_prediction_live": next_arrival.live_prediction if next_arrival else None,
+            "live_prediction": next_arrival.live_prediction if next_arrival else None,
             ATTR_MATCHING_ARRIVALS: self.serialize_matching_arrivals(),
+            "service_active": self.service_active,
+            "summary": self.summary,
             "last_updated": self.last_updated.isoformat(),
         }
 

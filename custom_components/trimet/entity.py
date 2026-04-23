@@ -22,7 +22,6 @@ class TriMetMonitorEntity(CoordinatorEntity[TriMetDataUpdateCoordinator]):
     ) -> None:
         """Initialize the entity."""
         super().__init__(entry.runtime_data.coordinator)
-        self._entry = entry
         self._monitor_id = monitor_id
         self._attr_unique_id = f"{entry.entry_id}_{monitor_id}_{entity_suffix}"
 

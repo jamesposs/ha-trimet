@@ -30,6 +30,7 @@ from custom_components.trimet.const import (
     CONF_STOP_ID,
     DEFAULT_POLL_INTERVAL_SECONDS,
     DOMAIN,
+    NAME,
 )
 
 
@@ -46,7 +47,7 @@ async def test_user_flow_success(hass) -> None:
         )
 
     assert result["type"] is data_entry_flow.FlowResultType.CREATE_ENTRY
-    assert result["title"] == "TriMet"
+    assert result["title"] == NAME
     assert result["data"] == {
         CONF_API_KEY: "valid-key",
         CONF_POLL_INTERVAL_SECONDS: 45,
@@ -76,7 +77,7 @@ async def test_duplicate_api_key_aborts(hass) -> None:
     """Test duplicate setup prevention."""
     entry = MockConfigEntry(
         domain=DOMAIN,
-        title="TriMet",
+        title=NAME,
         unique_id=_unique_id_from_api_key("dupe-key"),
         data={
             CONF_API_KEY: "dupe-key",

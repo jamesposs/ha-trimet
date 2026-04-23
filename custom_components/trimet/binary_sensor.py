@@ -20,7 +20,6 @@ async def async_setup_entry(
     entities: list[BinarySensorEntity] = []
     for monitor in entry.runtime_data.coordinator.iter_monitors():
         entities.append(TriMetDueSoonBinarySensor(entry, monitor.monitor_id))
-        entities.append(TriMetServiceActiveBinarySensor(entry, monitor.monitor_id))
     async_add_entities(entities)
 
 
@@ -51,27 +50,3 @@ class TriMetDueSoonBinarySensor(TriMetMonitorEntity, BinarySensorEntity):
             next_arrival.minutes_until(snapshot.reference_time)
             <= snapshot.monitor.due_soon_minutes
         )
-
-
-class TriMetServiceActiveBinarySensor(TriMetMonitorEntity, BinarySensorEntity):
-    """Whether any matching arrivals are currently available."""
-
-    _attr_icon = "mdi:check-circle-outline"
-
-    def __init__(self, entry: TriMetConfigEntry, monitor_id: str) -> None:
-        """Initialize the binary sensor."""
-        super().__init__(entry, monitor_id, "service_active")
-
-    @property
-    def name(self) -> str | None:
-        """Return the entity name."""
-        monitor = self.monitor
-        return f"{monitor.friendly_name} Service Active" if monitor else None
-
-    @property
-    def is_on(self) -> bool | None:
-        """Return whether any matching arrivals are available."""
-        snapshot = self.snapshot
-        if snapshot is None:
-            return False
-        return bool(snapshot.matching_arrivals)

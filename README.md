@@ -1,12 +1,13 @@
-# TriMet for Home Assistant
+# Portland TriMet Arrivals for Home Assistant
 
-`ha-trimet` is a Home Assistant custom integration for TriMet real-time arrivals in the Portland metro area. It lets you create multiple stop monitors from one integration entry, polls TriMet once per refresh cycle for all configured stops, and exposes stock Home Assistant entities that work well in standard Lovelace cards.
+`ha-trimet` is an independent Home Assistant custom integration for TriMet real-time arrivals in the Portland metro area. It lets you create multiple stop monitors from one integration entry, polls TriMet once per refresh cycle for all configured stops, and exposes a clean monitor-first entity model that works well in standard Lovelace cards. This is a community integration and is not affiliated with or endorsed by TriMet.
 
 ## Features
 
 - One config entry for your TriMet developer API key and global polling settings
 - Multiple UI-managed stop monitors from the integration options flow
 - Shared polling with `DataUpdateCoordinator`
+- One primary sensor per configured monitor
 - Per-monitor filtering by:
   - stop ID
   - route/line list
@@ -14,11 +15,8 @@
   - vehicle types (`bus`, `max`, `streetcar`, `wes`)
   - due soon threshold
   - number of arrivals kept in attributes
-- Useful backend entities without a custom card:
-  - main minutes-until-arrival sensor
-  - summary text sensor
+- Optional helper entity:
   - due soon binary sensor
-  - service active binary sensor
 
 ## Installation
 
@@ -28,7 +26,7 @@
 2. Add this repository as a custom repository:
    - Repository URL: `https://github.com/jamesposs/ha-trimet`
    - Category: `Integration`
-3. Install `TriMet`.
+3. Install `Portland TriMet Arrivals`.
 4. Restart Home Assistant.
 
 ### Manual
@@ -46,7 +44,7 @@ You need a TriMet developer API key from [developer.trimet.org](https://develope
 
 1. In Home Assistant, go to `Settings` -> `Devices & services`.
 2. Select `Add integration`.
-3. Search for `TriMet`.
+3. Search for `Portland TriMet Arrivals`.
 4. Enter:
    - your TriMet API key
    - an optional polling interval in seconds
@@ -67,7 +65,7 @@ Each monitor includes:
 
 ## Entities
 
-Each monitor creates four entities:
+Each monitor creates one primary sensor and one optional helper binary sensor.
 
 ### Main Sensor
 
@@ -79,30 +77,25 @@ Important attributes include:
 
 - `stop_id`
 - `stop_name`
+- `configured_lines`
+- `configured_directions`
+- `configured_vehicle_types`
+- `due_soon_threshold`
 - `next_route`
 - `next_route_id`
 - `next_destination`
 - `next_vehicle_type`
 - `next_scheduled_at`
 - `next_estimated_at`
-- `next_prediction_live`
+- `live_prediction`
 - `matching_arrivals`
+- `service_active`
+- `summary`
 - `last_updated`
-
-### Summary Sensor
-
-Examples:
-
-- `Blue to Hillsboro in 4 min`
-- `No matching arrivals`
 
 ### Due Soon Binary Sensor
 
 Turns on when the next matching arrival is at or below the monitor's threshold.
-
-### Service Active Binary Sensor
-
-Turns on when at least one matching, boardable arrival is currently available.
 
 ## Filtering Rules
 
@@ -138,4 +131,4 @@ The repository includes:
 
 ## Disclaimer
 
-TriMet is a trademark of Tri-County Metropolitan Transportation District of Oregon. This project is an independent Home Assistant custom integration and is not affiliated with or endorsed by TriMet.
+TriMet is a trademark of Tri-County Metropolitan Transportation District of Oregon. This project is an independent community Home Assistant custom integration and is not affiliated with or endorsed by TriMet.

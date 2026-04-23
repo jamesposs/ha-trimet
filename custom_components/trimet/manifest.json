@@ -1,6 +1,6 @@
 {
   "domain": "trimet",
-  "name": "TriMet",
+  "name": "Portland TriMet Arrivals",
   "codeowners": ["@jamesposs"],
   "config_flow": true,
   "documentation": "https://github.com/jamesposs/ha-trimet",

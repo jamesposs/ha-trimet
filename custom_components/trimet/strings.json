@@ -1,9 +1,9 @@
 {
-  "title": "TriMet",
+  "title": "Portland TriMet Arrivals",
   "config": {
     "step": {
       "user": {
-        "title": "Connect to TriMet",
+        "title": "Connect to Portland TriMet Arrivals",
         "description": "Enter your TriMet developer API key and the shared polling interval for all monitors.",
         "data": {
           "api_key": "API key",
@@ -24,7 +24,7 @@
   "options": {
     "step": {
       "init": {
-        "title": "TriMet options",
+        "title": "Portland TriMet Arrivals options",
         "menu_options": {
           "global": "Edit polling interval",
           "monitor_add": "Add monitor",
