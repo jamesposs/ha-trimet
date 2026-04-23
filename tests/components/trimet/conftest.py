@@ -149,9 +149,11 @@ def make_monitor_dict(
         CONF_MONITOR_ID: monitor_id,
         CONF_FRIENDLY_NAME: name,
         CONF_STOP_ID: stop_id,
-        CONF_ALLOWED_ROUTES: routes or ["90"],
-        CONF_ALLOWED_DIRECTIONS: directions or ["southbound"],
-        CONF_ALLOWED_VEHICLE_TYPES: vehicle_types or ["max"],
+        CONF_ALLOWED_ROUTES: routes if routes is not None else ["90"],
+        CONF_ALLOWED_DIRECTIONS: directions if directions is not None else ["southbound"],
+        CONF_ALLOWED_VEHICLE_TYPES: (
+            vehicle_types if vehicle_types is not None else ["max"]
+        ),
         CONF_DUE_SOON_MINUTES: due_soon_minutes,
         CONF_APPROACH_TIME_MINUTES: approach_time_minutes,
         CONF_SENSOR_MODE: sensor_mode,

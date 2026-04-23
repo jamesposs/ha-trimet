@@ -79,33 +79,25 @@ State: integer minutes until the configured primary arrival.
 
 The primary sensor can either track the literal next matching arrival or the next catchable arrival after your configured approach time. When no arrivals match, the sensor becomes `unknown` instead of holding a stale value. In catchable mode, the sensor also becomes `unknown` when arrivals exist but none can be caught in time. When the API is unavailable, the entity becomes unavailable.
 
+The main `arrivals` list is intentionally compact and easy to template. Each item includes `line`, `destination`, `minutes`, `catchable`, and `live`, with small extras like `direction` or `vehicle_type` only when helpful.
+
 Important attributes include:
 
 - `stop_id`
 - `stop_name`
-- `configured_lines`
-- `configured_directions`
-- `configured_vehicle_types`
+- `line`
+- `destination`
+- `vehicle_type`
+- `configured_lines` when a line filter is configured
+- `configured_directions` when a direction filter is configured
+- `configured_vehicle_types` when a vehicle-type filter is configured
 - `approach_time_minutes`
 - `sensor_mode`
-- `due_soon_threshold`
 - `next_arrival_minutes`
-- `next_arrival`
 - `next_catchable_arrival_minutes`
-- `next_catchable_arrival`
-- `next_route`
-- `next_route_id`
-- `next_destination`
-- `next_vehicle_type`
-- `next_scheduled_at`
-- `next_estimated_at`
-- `live_prediction`
-- `matching_arrivals`
-- `catchable_arrivals`
-- `skipped_arrivals`
+- `arrivals`
 - `service_active`
 - `summary`
-- `last_updated`
 
 ### Due Soon Binary Sensor
 

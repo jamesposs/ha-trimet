@@ -7,12 +7,11 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 import math
+import re
 from typing import Any
 
 from .const import (
-    ATTR_CATCHABLE_ARRIVALS,
-    ATTR_MATCHING_ARRIVALS,
-    ATTR_SKIPPED_ARRIVALS,
+    ATTR_ARRIVALS,
     CONF_APPROACH_TIME_MINUTES,
     CONF_ALLOWED_DIRECTIONS,
     CONF_ALLOWED_ROUTES,
@@ -268,77 +267,58 @@ class MonitorSnapshot:
                 )
             return "No matching arrivals"
 
-        route_name = primary_arrival.route_name or primary_arrival.route_id
+        line = _display_line(primary_arrival)
         minutes = primary_arrival.minutes_until(self.reference_time)
         destination = primary_arrival.destination or "service"
-        return f"{route_name} to {destination} in {minutes} min"
+        return f"{line} to {destination} in {minutes} min"
 
     def _serialize_arrival(self, arrival: Arrival) -> dict[str, Any]:
         """Serialize one arrival for state attributes."""
         minutes = arrival.minutes_until(self.reference_time)
-        return {
+        serialized = {
+            "line": _display_line(arrival),
+            "destination": arrival.destination or "service",
             "minutes": minutes,
-            "route": arrival.route_name or arrival.route_id,
-            "route_id": arrival.route_id,
-            "destination": arrival.destination,
-            "direction": arrival.direction,
-            "vehicle_type": arrival.vehicle_type.value,
-            "scheduled_at": arrival.scheduled_at.isoformat(),
-            "estimated_at": arrival.estimated_at.isoformat()
-            if arrival.estimated_at
-            else None,
-            "live_prediction": arrival.live_prediction,
-            "status": arrival.status,
             "catchable": minutes >= self.monitor.approach_time_minutes,
+            "live": arrival.live_prediction,
         }
+        direction = _humanize_direction(arrival.direction)
+        if direction is not None:
+            serialized["direction"] = direction
+        serialized["vehicle_type"] = arrival.vehicle_type.value
+        return serialized
 
     def _serialize_arrivals(
         self, arrivals: Sequence[Arrival], *, limit: int | None = None
     ) -> list[dict[str, Any]]:
         """Serialize arrivals for state attributes."""
         selected_arrivals = arrivals if limit is None else arrivals[:limit]
-        return [
-            self._serialize_arrival(arrival) for arrival in selected_arrivals
-        ]
+        return [self._serialize_arrival(arrival) for arrival in selected_arrivals]
 
     def as_main_sensor_attributes(self) -> dict[str, Any]:
         """Return the shared attribute payload for the main sensor."""
         next_arrival = self.next_arrival
+        primary_arrival = self.primary_arrival
         next_catchable_arrival = self.next_catchable_arrival
-        matching_arrivals = self._serialize_arrivals(
+        arrivals = self._serialize_arrivals(
             self.matching_arrivals, limit=self.monitor.max_arrivals
-        )
-        catchable_arrivals = self._serialize_arrivals(
-            self.catchable_arrivals, limit=self.monitor.max_arrivals
-        )
-        skipped_arrivals = self._serialize_arrivals(
-            self.skipped_arrivals, limit=self.monitor.max_arrivals
         )
 
         attributes: dict[str, Any] = {
             "stop_id": self.monitor.stop_id,
             "stop_name": self.stop.name or self.stop.description or self.monitor.stop_id,
-            "configured_lines": list(self.monitor.allowed_routes),
-            "configured_directions": list(self.monitor.allowed_directions),
-            "configured_vehicle_types": list(self.monitor.allowed_vehicle_types),
-            "due_soon_threshold": self.monitor.due_soon_minutes,
             "approach_time_minutes": self.monitor.approach_time_minutes,
             "sensor_mode": self.monitor.sensor_mode,
-            "next_route": next_arrival.route_name if next_arrival else None,
-            "next_route_id": next_arrival.route_id if next_arrival else None,
-            "next_destination": next_arrival.destination if next_arrival else None,
-            "next_vehicle_type": next_arrival.vehicle_type.value if next_arrival else None,
-            "next_scheduled_at": next_arrival.scheduled_at.isoformat()
-            if next_arrival
-            else None,
-            "next_estimated_at": next_arrival.estimated_at.isoformat()
-            if next_arrival and next_arrival.estimated_at
-            else None,
-            "live_prediction": next_arrival.live_prediction if next_arrival else None,
+            "line": _display_line(primary_arrival) if primary_arrival else None,
+            "destination": (
+                (primary_arrival.destination or "service")
+                if primary_arrival
+                else None
+            ),
+            "vehicle_type": (
+                primary_arrival.vehicle_type.value if primary_arrival else None
+            ),
             "next_arrival_minutes": next_arrival.minutes_until(self.reference_time)
-            if next_arrival
-            else None,
-            "next_arrival": self._serialize_arrival(next_arrival)
             if next_arrival
             else None,
             "next_catchable_arrival_minutes": (
@@ -346,19 +326,18 @@ class MonitorSnapshot:
                 if next_catchable_arrival
                 else None
             ),
-            "next_catchable_arrival": (
-                self._serialize_arrival(next_catchable_arrival)
-                if next_catchable_arrival
-                else None
-            ),
-            ATTR_MATCHING_ARRIVALS: matching_arrivals,
-            ATTR_CATCHABLE_ARRIVALS: catchable_arrivals,
+            ATTR_ARRIVALS: arrivals,
             "service_active": self.service_active,
             "summary": self.summary,
-            "last_updated": self.last_updated.isoformat(),
         }
-        if skipped_arrivals:
-            attributes[ATTR_SKIPPED_ARRIVALS] = skipped_arrivals
+        if self.monitor.allowed_routes:
+            attributes["configured_lines"] = list(self.monitor.allowed_routes)
+        if self.monitor.allowed_directions:
+            attributes["configured_directions"] = list(self.monitor.allowed_directions)
+        if self.monitor.allowed_vehicle_types:
+            attributes["configured_vehicle_types"] = list(
+                self.monitor.allowed_vehicle_types
+            )
         return attributes
 
 
@@ -410,6 +389,58 @@ def normalize_sensor_mode(value: Any) -> str:
     if normalized in SUPPORTED_SENSOR_MODES:
         return normalized
     return SENSOR_MODE_NEXT_ARRIVAL
+
+
+def _display_line(arrival: Arrival | None) -> str | None:
+    """Return a compact, human-readable line label."""
+    if arrival is None:
+        return None
+
+    route_name = normalize_single_text(arrival.route_name)
+    route_id = normalize_single_text(arrival.route_id)
+
+    if arrival.vehicle_type is VehicleType.BUS:
+        return route_id or route_name
+
+    if arrival.vehicle_type is VehicleType.WES and route_name:
+        if "wes" in route_name.lower():
+            return "WES"
+
+    if route_name:
+        cleaned = route_name
+        cleaned = re.sub(r"(?i)^portland streetcar\s+", "", cleaned)
+        cleaned = re.sub(r"(?i)^max\s+", "", cleaned)
+        cleaned = re.sub(r"(?i)\s+streetcar$", "", cleaned)
+        cleaned = re.sub(r"(?i)\s+line$", "", cleaned)
+        cleaned = re.sub(r"\s+", " ", cleaned).strip(" -")
+        if cleaned:
+            return cleaned
+
+    return route_id or route_name or "Service"
+
+
+def _humanize_direction(value: str | None) -> str | None:
+    """Return a readable direction string."""
+    normalized = normalize_single_text(value)
+    if normalized is None:
+        return None
+
+    collapsed = re.sub(r"[^a-z]", "", normalized.lower())
+    mapping = {
+        "n": "Northbound",
+        "s": "Southbound",
+        "e": "Eastbound",
+        "w": "Westbound",
+        "nb": "Northbound",
+        "sb": "Southbound",
+        "eb": "Eastbound",
+        "wb": "Westbound",
+        "northbound": "Northbound",
+        "southbound": "Southbound",
+        "eastbound": "Eastbound",
+        "westbound": "Westbound",
+    }
+    return mapping.get(collapsed, normalized)
 
 
 def normalize_single_text(

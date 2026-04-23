@@ -55,9 +55,7 @@ SUPPORTED_VEHICLE_TYPES: tuple[str, ...] = (
 
 VALIDATION_STOP_ID = "6849"
 
-ATTR_MATCHING_ARRIVALS = "matching_arrivals"
-ATTR_CATCHABLE_ARRIVALS = "catchable_arrivals"
-ATTR_SKIPPED_ARRIVALS = "skipped_arrivals"
+ATTR_ARRIVALS = "arrivals"
 
 SENSOR_MODE_NEXT_ARRIVAL = "next_arrival"
 SENSOR_MODE_NEXT_CATCHABLE_ARRIVAL = "next_catchable_arrival"

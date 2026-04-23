@@ -5,9 +5,7 @@ from __future__ import annotations
 from homeassistant.const import STATE_UNKNOWN
 
 from custom_components.trimet.const import (
-    ATTR_CATCHABLE_ARRIVALS,
-    ATTR_MATCHING_ARRIVALS,
-    ATTR_SKIPPED_ARRIVALS,
+    ATTR_ARRIVALS,
     SENSOR_MODE_NEXT_CATCHABLE_ARRIVAL,
     SENSOR_MODE_NEXT_ARRIVAL,
 )
@@ -26,25 +24,48 @@ async def test_primary_sensor_state_and_attributes(
     assert state.state == "4"
     assert state.attributes["stop_id"] == "1234"
     assert state.attributes["stop_name"] == "Hollywood/NE 42nd Ave TC MAX Station"
+    assert state.attributes["line"] == "Blue"
+    assert state.attributes["destination"] == "Hillsboro"
+    assert state.attributes["vehicle_type"] == "max"
     assert state.attributes["configured_lines"] == ["90"]
     assert state.attributes["configured_directions"] == ["southbound"]
     assert state.attributes["configured_vehicle_types"] == ["max"]
-    assert state.attributes["due_soon_threshold"] == 10
     assert state.attributes["approach_time_minutes"] == 0
     assert state.attributes["sensor_mode"] == SENSOR_MODE_NEXT_ARRIVAL
-    assert state.attributes["next_route"] == "Blue"
-    assert state.attributes["next_route_id"] == "90"
-    assert state.attributes["next_destination"] == "Hillsboro"
-    assert state.attributes["next_vehicle_type"] == "max"
     assert state.attributes["next_arrival_minutes"] == 4
-    assert state.attributes["next_arrival"]["catchable"] is True
     assert state.attributes["next_catchable_arrival_minutes"] == 4
-    assert state.attributes["next_catchable_arrival"]["catchable"] is True
-    assert state.attributes["live_prediction"] is True
     assert state.attributes["service_active"] is True
     assert state.attributes["summary"] == "Blue to Hillsboro in 4 min"
-    assert len(state.attributes[ATTR_MATCHING_ARRIVALS]) == 2
-    assert len(state.attributes[ATTR_CATCHABLE_ARRIVALS]) == 2
+    assert "due_soon_threshold" not in state.attributes
+    assert "next_route" not in state.attributes
+    assert "next_route_id" not in state.attributes
+    assert "next_destination" not in state.attributes
+    assert "next_vehicle_type" not in state.attributes
+    assert "next_scheduled_at" not in state.attributes
+    assert "next_estimated_at" not in state.attributes
+    assert "live_prediction" not in state.attributes
+    assert "next_arrival" not in state.attributes
+    assert "next_catchable_arrival" not in state.attributes
+    assert state.attributes[ATTR_ARRIVALS] == [
+        {
+            "line": "Blue",
+            "destination": "Hillsboro",
+            "minutes": 4,
+            "catchable": True,
+            "live": True,
+            "direction": "Southbound",
+            "vehicle_type": "max",
+        },
+        {
+            "line": "Blue",
+            "destination": "Hillsboro",
+            "minutes": 9,
+            "catchable": True,
+            "live": True,
+            "direction": "Southbound",
+            "vehicle_type": "max",
+        },
+    ]
     assert hass.states.get("sensor.hollywood_blue_summary") is None
 
 
@@ -61,7 +82,7 @@ async def test_main_sensor_becomes_unknown_when_no_arrivals_match(
     state = hass.states.get("sensor.hollywood_blue")
     assert state is not None
     assert state.state == STATE_UNKNOWN
-    assert state.attributes[ATTR_MATCHING_ARRIVALS] == []
+    assert state.attributes[ATTR_ARRIVALS] == []
     assert state.attributes["service_active"] is False
     assert state.attributes["summary"] == "No matching arrivals"
 
@@ -82,15 +103,15 @@ async def test_catchable_mode_uses_first_catchable_arrival(
     assert state is not None
     assert state.state == "9"
     assert state.attributes["sensor_mode"] == SENSOR_MODE_NEXT_CATCHABLE_ARRIVAL
+    assert state.attributes["line"] == "Blue"
     assert state.attributes["next_arrival_minutes"] == 4
     assert state.attributes["next_catchable_arrival_minutes"] == 9
     assert state.attributes["summary"] == "Blue to Hillsboro in 9 min"
-    assert [item["catchable"] for item in state.attributes[ATTR_MATCHING_ARRIVALS]] == [
+    assert [item["catchable"] for item in state.attributes[ATTR_ARRIVALS]] == [
         False,
         True,
     ]
-    assert len(state.attributes[ATTR_CATCHABLE_ARRIVALS]) == 1
-    assert len(state.attributes[ATTR_SKIPPED_ARRIVALS]) == 1
+    assert len(state.attributes[ATTR_ARRIVALS]) == 2
 
 
 async def test_catchable_mode_becomes_unknown_when_no_departure_is_reachable(
@@ -108,9 +129,65 @@ async def test_catchable_mode_becomes_unknown_when_no_departure_is_reachable(
     state = hass.states.get("sensor.hollywood_blue")
     assert state is not None
     assert state.state == STATE_UNKNOWN
+    assert state.attributes["line"] is None
     assert state.attributes["next_arrival_minutes"] == 4
     assert state.attributes["next_catchable_arrival_minutes"] is None
-    assert state.attributes[ATTR_CATCHABLE_ARRIVALS] == []
-    assert len(state.attributes[ATTR_SKIPPED_ARRIVALS]) == 2
+    assert [item["catchable"] for item in state.attributes[ATTR_ARRIVALS]] == [
+        False,
+        False,
+    ]
     assert state.attributes["service_active"] is True
     assert state.attributes["summary"] == "No catchable arrivals in the next 2 departures"
+
+
+async def test_sensor_hides_empty_filter_attributes(
+    hass, mock_config_entry, mock_fetch_arrivals
+) -> None:
+    """Test empty monitor filters are not exposed in the attribute payload."""
+    monitor = mock_config_entry.options["monitors"][0]
+    monitor["allowed_routes"] = []
+    monitor["allowed_directions"] = []
+    monitor["allowed_vehicle_types"] = []
+    mock_config_entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("sensor.hollywood_blue")
+    assert state is not None
+    assert "configured_lines" not in state.attributes
+    assert "configured_directions" not in state.attributes
+    assert "configured_vehicle_types" not in state.attributes
+
+
+async def test_sensor_uses_compact_line_name_for_summary_and_arrivals(
+    hass, mock_config_entry, mock_fetch_arrivals
+) -> None:
+    """Test the primary sensor exposes a compact line label."""
+    monitor = mock_config_entry.options["monitors"][0]
+    monitor["allowed_routes"] = ["193"]
+    monitor["allowed_directions"] = ["westbound"]
+    monitor["allowed_vehicle_types"] = ["streetcar"]
+    mock_config_entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("sensor.hollywood_blue")
+    assert state is not None
+    assert state.state == "3"
+    assert state.attributes["line"] == "NS"
+    assert state.attributes["destination"] == "NW 23rd"
+    assert state.attributes["vehicle_type"] == "streetcar"
+    assert state.attributes["summary"] == "NS to NW 23rd in 3 min"
+    assert state.attributes[ATTR_ARRIVALS] == [
+        {
+            "line": "NS",
+            "destination": "NW 23rd",
+            "minutes": 3,
+            "catchable": True,
+            "live": True,
+            "direction": "Westbound",
+            "vehicle_type": "streetcar",
+        }
+    ]
