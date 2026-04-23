@@ -1,4 +1,6 @@
 # Portland TriMet Arrivals for Home Assistant
+<!-- GitHub repo description: A Home Assistant custom integration for Portland-area TriMet real-time arrivals and stop monitors. -->
+<!-- Short tagline alternative: Portland TriMet arrivals and stop monitors for Home Assistant. -->
 
 `ha-trimet` is an independent Home Assistant custom integration for TriMet real-time arrivals in the Portland metro area. It lets you create multiple stop monitors from one integration entry, polls TriMet once per refresh cycle for all configured stops, and exposes a clean monitor-first entity model that works well in standard Lovelace cards. This is a community integration and is not affiliated with or endorsed by TriMet.
 
@@ -79,7 +81,7 @@ State: integer minutes until the configured primary arrival.
 
 The primary sensor can either track the literal next matching arrival or the next catchable arrival after your configured approach time. When no arrivals match, the sensor becomes `unknown` instead of holding a stale value. In catchable mode, the sensor also becomes `unknown` when arrivals exist but none can be caught in time. When the API is unavailable, the entity becomes unavailable.
 
-The main `arrivals` list is intentionally compact and easy to template. Each item includes `line`, `destination`, `minutes`, `catchable`, and `live`, with small extras like `direction` or `vehicle_type` only when helpful.
+The main `arrivals` list is intentionally compact and easy to template. Each item includes `line`, `destination`, `minutes`, `catchable`, and `live`.
 
 Important attributes include:
 
@@ -88,11 +90,7 @@ Important attributes include:
 - `line`
 - `destination`
 - `vehicle_type`
-- `configured_lines` when a line filter is configured
-- `configured_directions` when a direction filter is configured
-- `configured_vehicle_types` when a vehicle-type filter is configured
 - `approach_time_minutes`
-- `sensor_mode`
 - `next_arrival_minutes`
 - `next_catchable_arrival_minutes`
 - `arrivals`

@@ -24,6 +24,7 @@ from custom_components.trimet.const import (
     SENSOR_MODE_NEXT_CATCHABLE_ARRIVAL,
 )
 from custom_components.trimet.coordinator import TriMetDataUpdateCoordinator
+from custom_components.trimet.models import parse_arrivals_response
 
 
 class StubApi:
@@ -84,6 +85,20 @@ async def test_coordinator_computes_catchable_arrivals(
     assert len(snapshot.skipped_arrivals) == 1
     assert snapshot.primary_minutes == 9
     assert snapshot.summary == "Blue to Hillsboro in 9 min"
+
+
+def test_parse_arrivals_response_preserves_stop_name_from_arrival_when_needed(
+    sample_api_response,
+) -> None:
+    """Test readable stop names survive even if the location block is sparse."""
+    sample_api_response["resultSet"]["location"] = [{"locid": 1234}]
+    sample_api_response["resultSet"]["arrival"][0]["locDesc"] = "Hollywood TC Platform A"
+    sample_api_response["resultSet"]["arrival"][1]["locDesc"] = "Hollywood TC Platform A"
+
+    feed = parse_arrivals_response(sample_api_response)
+
+    assert feed.stops["1234"].name == "Hollywood TC Platform A"
+    assert feed.stops["1234"].description == "Hollywood TC Platform A"
 
 
 async def test_coordinator_marks_failed_update_on_connection_error(

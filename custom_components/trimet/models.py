@@ -282,10 +282,6 @@ class MonitorSnapshot:
             "catchable": minutes >= self.monitor.approach_time_minutes,
             "live": arrival.live_prediction,
         }
-        direction = _humanize_direction(arrival.direction)
-        if direction is not None:
-            serialized["direction"] = direction
-        serialized["vehicle_type"] = arrival.vehicle_type.value
         return serialized
 
     def _serialize_arrivals(
@@ -308,7 +304,6 @@ class MonitorSnapshot:
             "stop_id": self.monitor.stop_id,
             "stop_name": self.stop.name or self.stop.description or self.monitor.stop_id,
             "approach_time_minutes": self.monitor.approach_time_minutes,
-            "sensor_mode": self.monitor.sensor_mode,
             "line": _display_line(primary_arrival) if primary_arrival else None,
             "destination": (
                 (primary_arrival.destination or "service")
@@ -330,14 +325,6 @@ class MonitorSnapshot:
             "service_active": self.service_active,
             "summary": self.summary,
         }
-        if self.monitor.allowed_routes:
-            attributes["configured_lines"] = list(self.monitor.allowed_routes)
-        if self.monitor.allowed_directions:
-            attributes["configured_directions"] = list(self.monitor.allowed_directions)
-        if self.monitor.allowed_vehicle_types:
-            attributes["configured_vehicle_types"] = list(
-                self.monitor.allowed_vehicle_types
-            )
         return attributes
 
 
@@ -419,30 +406,6 @@ def _display_line(arrival: Arrival | None) -> str | None:
     return route_id or route_name or "Service"
 
 
-def _humanize_direction(value: str | None) -> str | None:
-    """Return a readable direction string."""
-    normalized = normalize_single_text(value)
-    if normalized is None:
-        return None
-
-    collapsed = re.sub(r"[^a-z]", "", normalized.lower())
-    mapping = {
-        "n": "Northbound",
-        "s": "Southbound",
-        "e": "Eastbound",
-        "w": "Westbound",
-        "nb": "Northbound",
-        "sb": "Southbound",
-        "eb": "Eastbound",
-        "wb": "Westbound",
-        "northbound": "Northbound",
-        "southbound": "Southbound",
-        "eastbound": "Eastbound",
-        "westbound": "Westbound",
-    }
-    return mapping.get(collapsed, normalized)
-
-
 def normalize_single_text(
     value: str | None, *, uppercase: bool = False, lowercase: bool = False
 ) -> str | None:
@@ -482,8 +445,8 @@ def parse_arrivals_response(payload: Mapping[str, Any]) -> TriMetFeed:
         stop_id = str(location["locid"])
         stops[stop_id] = StopInfo(
             stop_id=stop_id,
-            name=_string_or_none(location.get("desc")),
-            description=_string_or_none(location.get("desc")),
+            name=_extract_stop_name(location),
+            description=_extract_stop_description(location),
             latitude=_float_or_none(location.get("lat")),
             longitude=_float_or_none(location.get("lng")),
         )
@@ -507,6 +470,23 @@ def parse_arrivals_response(payload: Mapping[str, Any]) -> TriMetFeed:
 
         estimated_at = _parse_timestamp(raw_arrival.get("estimated"))
         status = _string_or_none(raw_arrival.get("status"))
+        stop_name = _extract_stop_name(raw_arrival)
+        stop_description = _extract_stop_description(raw_arrival)
+
+        if stop_id not in stops:
+            stops[stop_id] = StopInfo(
+                stop_id=stop_id,
+                name=stop_name,
+                description=stop_description,
+            )
+        elif stop_name and stops[stop_id].name is None:
+            stops[stop_id] = StopInfo(
+                stop_id=stop_id,
+                name=stop_name,
+                description=stop_description or stops[stop_id].description,
+                latitude=stops[stop_id].latitude,
+                longitude=stops[stop_id].longitude,
+            )
 
         arrival = Arrival(
             stop_id=stop_id,
@@ -617,6 +597,24 @@ def _string_or_none(value: Any) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+def _extract_stop_name(value: Mapping[str, Any]) -> str | None:
+    """Extract a human-readable stop name from TriMet payload fragments."""
+    for key in ("desc", "shortDesc", "fullDesc", "description", "locDesc", "stopDesc"):
+        text = _string_or_none(value.get(key))
+        if text:
+            return text
+    return None
+
+
+def _extract_stop_description(value: Mapping[str, Any]) -> str | None:
+    """Extract a stop description, falling back to the name when needed."""
+    for key in ("fullDesc", "description", "desc", "shortDesc", "locDesc", "stopDesc"):
+        text = _string_or_none(value.get(key))
+        if text:
+            return text
+    return None
 
 
 def _float_or_none(value: Any) -> float | None:
