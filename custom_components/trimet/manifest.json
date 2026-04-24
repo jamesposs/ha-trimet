@@ -4,9 +4,9 @@
   "codeowners": ["@jamesposs"],
   "config_flow": true,
   "documentation": "https://github.com/jamesposs/ha-trimet",
-  "issue_tracker": "https://github.com/jamesposs/ha-trimet/issues",
   "integration_type": "hub",
   "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/jamesposs/ha-trimet/issues",
   "requirements": [],
   "version": "1.0.0"
 }
