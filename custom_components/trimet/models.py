@@ -61,6 +61,7 @@ class StopInfo:
     stop_id: str
     name: str | None = None
     description: str | None = None
+    direction: str | None = None
     latitude: float | None = None
     longitude: float | None = None
 
@@ -77,16 +78,23 @@ class Arrival:
     vehicle_type: VehicleType
     scheduled_at: datetime
     estimated_at: datetime | None
-    live_prediction: bool
     status: str | None
+    reason: str | None
+    live: bool
+    delay_minutes: int | None
+    delayed: bool
     canceled: bool
+    uncertain: bool
     drop_off_only: bool
+    route_color: str | None = None
     vehicle_id: str | None = None
 
     @property
     def effective_time(self) -> datetime:
         """Return the best available arrival timestamp."""
-        return self.estimated_at or self.scheduled_at
+        if self.live and self.estimated_at is not None:
+            return self.estimated_at
+        return self.scheduled_at
 
     def minutes_until(self, reference: datetime) -> int:
         """Return whole minutes until the arrival, rounded up."""
@@ -266,11 +274,7 @@ class MonitorSnapshot:
                     f"{departures_considered} departures"
                 )
             return "No matching arrivals"
-
-        line = _display_line(primary_arrival)
-        minutes = primary_arrival.minutes_until(self.reference_time)
-        destination = primary_arrival.destination or "service"
-        return f"{line} to {destination} in {minutes} min"
+        return _summarize_arrival(primary_arrival, self.reference_time)
 
     def _serialize_arrival(self, arrival: Arrival) -> dict[str, Any]:
         """Serialize one arrival for state attributes."""
@@ -278,10 +282,20 @@ class MonitorSnapshot:
         serialized = {
             "line": _display_line(arrival),
             "destination": arrival.destination or "service",
+            "direction": arrival.direction,
             "minutes": minutes,
             "catchable": minutes >= self.monitor.approach_time_minutes,
-            "live": arrival.live_prediction,
+            "live": arrival.live,
+            "status": arrival.status,
+            "delayed": arrival.delayed,
+            "delay_minutes": arrival.delay_minutes,
+            "canceled": arrival.canceled,
+            "uncertain": arrival.uncertain,
+            "vehicle_type": arrival.vehicle_type.value,
+            "route_color": arrival.route_color,
         }
+        if arrival.reason:
+            serialized["reason"] = arrival.reason
         return serialized
 
     def _serialize_arrivals(
@@ -313,6 +327,7 @@ class MonitorSnapshot:
             "vehicle_type": (
                 primary_arrival.vehicle_type.value if primary_arrival else None
             ),
+            "route_color": primary_arrival.route_color if primary_arrival else None,
             "next_arrival_minutes": next_arrival.minutes_until(self.reference_time)
             if next_arrival
             else None,
@@ -321,6 +336,12 @@ class MonitorSnapshot:
                 if next_catchable_arrival
                 else None
             ),
+            "next_delayed": primary_arrival.delayed if primary_arrival else False,
+            "next_delay_minutes": (
+                primary_arrival.delay_minutes if primary_arrival else None
+            ),
+            "next_status": primary_arrival.status if primary_arrival else None,
+            "next_reason": primary_arrival.reason if primary_arrival else None,
             ATTR_ARRIVALS: arrivals,
             "service_active": self.service_active,
             "summary": self.summary,
@@ -406,6 +427,32 @@ def _display_line(arrival: Arrival | None) -> str | None:
     return route_id or route_name or "Service"
 
 
+def _summarize_arrival(arrival: Arrival, reference: datetime) -> str:
+    """Return a concise human-readable summary for one arrival."""
+    line = _display_line(arrival) or "Service"
+    destination = arrival.destination or "service"
+    base = f"{line} to {destination}"
+
+    if arrival.canceled:
+        return f"{base} canceled"
+
+    if arrival.uncertain:
+        if arrival.reason:
+            return f"{base} delayed ({arrival.reason})"
+        return f"{base} delayed"
+
+    minutes = arrival.minutes_until(reference)
+    summary = f"{base} in {minutes} min"
+
+    if arrival.delayed and arrival.delay_minutes is not None:
+        return f"{summary} ({arrival.delay_minutes} min late)"
+
+    if arrival.status == "scheduled":
+        return f"{summary} (scheduled)"
+
+    return summary
+
+
 def normalize_single_text(
     value: str | None, *, uppercase: bool = False, lowercase: bool = False
 ) -> str | None:
@@ -439,14 +486,18 @@ def parse_arrivals_response(payload: Mapping[str, Any]) -> TriMetFeed:
 
     stops: dict[str, StopInfo] = {}
     for location in _as_list(result.get("location")):
-        if not isinstance(location, Mapping) or location.get("locid") is None:
+        if not isinstance(location, Mapping):
             continue
 
-        stop_id = str(location["locid"])
+        stop_id = _extract_stop_id(location)
+        if stop_id is None:
+            continue
+
         stops[stop_id] = StopInfo(
             stop_id=stop_id,
             name=_extract_stop_name(location),
             description=_extract_stop_description(location),
+            direction=_extract_direction(location),
             latitude=_float_or_none(location.get("lat")),
             longitude=_float_or_none(location.get("lng")),
         )
@@ -469,39 +520,52 @@ def parse_arrivals_response(payload: Mapping[str, Any]) -> TriMetFeed:
             continue
 
         estimated_at = _parse_timestamp(raw_arrival.get("estimated"))
-        status = _string_or_none(raw_arrival.get("status"))
+        status = normalize_single_text(_string_or_none(raw_arrival.get("status")), lowercase=True)
+        reason = _string_or_none(raw_arrival.get("reason"))
         stop_name = _extract_stop_name(raw_arrival)
         stop_description = _extract_stop_description(raw_arrival)
+        stop_direction = stops.get(stop_id).direction if stop_id in stops else None
 
         if stop_id not in stops:
             stops[stop_id] = StopInfo(
                 stop_id=stop_id,
                 name=stop_name,
                 description=stop_description,
+                direction=_extract_direction(raw_arrival),
             )
         elif stop_name and stops[stop_id].name is None:
             stops[stop_id] = StopInfo(
                 stop_id=stop_id,
                 name=stop_name,
                 description=stop_description or stops[stop_id].description,
+                direction=stops[stop_id].direction,
                 latitude=stops[stop_id].latitude,
                 longitude=stops[stop_id].longitude,
             )
+
+        live = status == "estimated"
+        delay_minutes = _calculate_delay_minutes(scheduled_at, estimated_at)
+        uncertain = status == "delayed"
+        canceled = status == "canceled"
 
         arrival = Arrival(
             stop_id=stop_id,
             route_id=route_id,
             route_name=_string_or_none(route_meta.get("desc")),
-            destination=_string_or_none(raw_arrival.get("fullSign"))
-            or _string_or_none(raw_arrival.get("shortSign")),
-            direction=_string_or_none(raw_arrival.get("dir")),
+            destination=_extract_destination(raw_arrival),
+            direction=_extract_direction(raw_arrival, fallback=stop_direction),
             vehicle_type=_normalize_vehicle_type(raw_arrival, route_meta),
             scheduled_at=scheduled_at,
             estimated_at=estimated_at,
-            live_prediction=estimated_at is not None and status != "scheduled",
             status=status,
-            canceled=status == "canceled",
+            reason=reason,
+            live=live,
+            delay_minutes=delay_minutes,
+            delayed=(delay_minutes or 0) > 0,
+            canceled=canceled,
+            uncertain=uncertain,
             drop_off_only=bool(raw_arrival.get("dropOffOnly")),
+            route_color=_normalize_route_color(raw_arrival.get("routeColor")),
             vehicle_id=_string_or_none(raw_arrival.get("vehicleID")),
         )
         arrivals_by_stop.setdefault(stop_id, []).append(arrival)
@@ -555,9 +619,14 @@ def _normalize_vehicle_type(
     arrival: Mapping[str, Any], route: Mapping[str, Any]
 ) -> VehicleType:
     """Map TriMet route metadata to a stable vehicle type."""
-    route_type = normalize_single_text(_string_or_none(route.get("type")), uppercase=True)
+    route_type = normalize_single_text(
+        _string_or_none(route.get("type")) or _string_or_none(arrival.get("type")),
+        uppercase=True,
+    )
     route_subtype = normalize_single_text(
-        _string_or_none(route.get("routeSubType")), lowercase=True
+        _string_or_none(route.get("routeSubType"))
+        or _string_or_none(arrival.get("routeSubType")),
+        lowercase=True,
     )
 
     if bool(arrival.get("streetCar")) or route_subtype == "streetcar":
@@ -599,6 +668,16 @@ def _string_or_none(value: Any) -> str | None:
     return text or None
 
 
+def _extract_stop_id(value: Mapping[str, Any]) -> str | None:
+    """Extract a stop identifier from TriMet payload fragments."""
+    for key in ("locid", "id"):
+        raw_stop_id = value.get(key)
+        if raw_stop_id in (None, ""):
+            continue
+        return str(raw_stop_id)
+    return None
+
+
 def _extract_stop_name(value: Mapping[str, Any]) -> str | None:
     """Extract a human-readable stop name from TriMet payload fragments."""
     for key in ("desc", "shortDesc", "fullDesc", "description", "locDesc", "stopDesc"):
@@ -615,6 +694,51 @@ def _extract_stop_description(value: Mapping[str, Any]) -> str | None:
         if text:
             return text
     return None
+
+
+def _extract_direction(
+    value: Mapping[str, Any], *, fallback: str | None = None
+) -> str | None:
+    """Extract a readable direction, using the location block when needed."""
+    raw_direction = value.get("dir")
+    if isinstance(raw_direction, str):
+        return normalize_single_text(raw_direction)
+    return normalize_single_text(fallback)
+
+
+def _extract_destination(value: Mapping[str, Any]) -> str | None:
+    """Extract a user-facing destination from TriMet sign fields."""
+    for key in ("shortSign", "fullSign"):
+        sign = normalize_single_text(_string_or_none(value.get(key)))
+        if sign is None:
+            continue
+        parts = re.split(r"(?i)\s+to\s+", sign, maxsplit=1)
+        if len(parts) == 2:
+            return parts[1].strip()
+        return sign
+    return None
+
+
+def _calculate_delay_minutes(
+    scheduled_at: datetime | None, estimated_at: datetime | None
+) -> int | None:
+    """Compute whole positive delay minutes from scheduled and estimated times."""
+    if scheduled_at is None or estimated_at is None:
+        return None
+    seconds = (estimated_at - scheduled_at).total_seconds()
+    return max(0, int(seconds // 60))
+
+
+def _normalize_route_color(value: Any) -> str | None:
+    """Normalize TriMet route colors to CSS-friendly hex strings when possible."""
+    color = _string_or_none(value)
+    if color is None:
+        return None
+
+    normalized = color.removeprefix("#").strip()
+    if re.fullmatch(r"[0-9A-Fa-f]{3}([0-9A-Fa-f]{3})?", normalized):
+        return f"#{normalized.upper()}"
+    return color
 
 
 def _float_or_none(value: Any) -> float | None:
